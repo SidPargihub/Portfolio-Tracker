@@ -29,10 +29,14 @@ Don't just observe the market—dominate it. With a meticulously crafted, glassm
 
 Setting up your command center is phenomenal and effortless.
 
+**Prerequisites:** 
+- **Python 3.9+** is required.
+- Ensure the project structure maintains the `templates/` and `static/` directories exactly as they are—they power the dashboard's aesthetics and functionality.
+
 ```bash
 # 1. Establish the foundation
-git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git
-cd "YOUR_REPOSITORY_NAME"
+git clone https://github.com/Siddh-Parikh/Portfolio-Tracker.git
+cd Portfolio-Tracker
 
 # 2. Forge the environment
 pip install -r requirements.txt

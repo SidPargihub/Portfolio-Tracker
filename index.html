@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio Tracker</title>
+    <meta name="description" content="Track your investment portfolio with live prices, sector analysis, and performance metrics.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="7" fill="var(--accent)"/><path d="M7 18L11 12L15 15L21 8" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="21" cy="8" r="2" fill="#fff"/></svg>
+                <span>Portfolio</span>
+            </div>
+        </div>
+
+        <div class="portfolio-selector" id="portfolio-selector">
+            <select id="portfolio-select" onchange="App.switchPortfolio(this.value)">
+                <option value="">No Portfolio</option>
+            </select>
+        </div>
+
+        <nav class="sidebar-nav">
+            <a class="nav-item active" data-view="dashboard" onclick="App.navigate('dashboard')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+                <span>Dashboard</span>
+            </a>
+            <a class="nav-item" data-view="holdings" onclick="App.navigate('holdings')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg>
+                <span>Holdings</span>
+            </a>
+            <a class="nav-item" data-view="sectors" onclick="App.navigate('sectors')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/><path d="M21 3v6h-6"/></svg>
+                <span>Sectors</span>
+            </a>
+            <a class="nav-item" data-view="watchlist" onclick="App.navigate('watchlist')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <span>Watchlist</span>
+            </a>
+            <a class="nav-item" data-view="history" onclick="App.navigate('history')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span>History</span>
+            </a>
+            <a class="nav-item" data-view="performance" onclick="App.navigate('performance')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                <span>Performance</span>
+            </a>
+            <a class="nav-item" data-view="transactions" onclick="App.navigate('transactions')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+                <span>Transactions</span>
+            </a>
+
+            <div class="nav-divider"></div>
+
+            <a class="nav-item" onclick="App.showImportModal()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>Import CSV</span>
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <button class="theme-toggle" id="theme-toggle" onclick="App.toggleTheme()" title="Toggle dark mode">
+                <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <header class="content-header" id="content-header">
+            <div class="header-left">
+                <button class="menu-toggle" id="menu-toggle" onclick="App.toggleSidebar()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                <h1 id="page-title">Dashboard</h1>
+            </div>
+            <div class="header-actions" id="header-actions"></div>
+        </header>
+
+        <div class="content-body" id="app-content">
+            <!-- Views rendered here -->
+        </div>
+    </main>
+
+    <!-- Import Modal -->
+    <div class="modal-overlay" id="import-modal" onclick="App.closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>Import Portfolio</h2>
+                <button class="modal-close" onclick="App.closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Portfolio Name</label>
+                    <input type="text" id="import-portfolio-name" placeholder="My Portfolio" value="My Portfolio">
+                </div>
+                <div class="form-group">
+                    <label>Holdings CSV <span class="required">*</span></label>
+                    <div class="file-drop" id="drop-holdings" onclick="document.getElementById('file-holdings').click()">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        <span class="drop-text">Drop CSV here or click to browse</span>
+                        <span class="drop-file" id="drop-holdings-name"></span>
+                    </div>
+                    <input type="file" id="file-holdings" accept=".csv" hidden onchange="App.handleFile(this,'holdings')">
+                </div>
+                <div class="form-group">
+                    <label>Gain/Loss CSV <span class="optional">(optional)</span></label>
+                    <div class="file-drop" id="drop-gainloss" onclick="document.getElementById('file-gainloss').click()">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        <span class="drop-text">Drop CSV here or click to browse</span>
+                        <span class="drop-file" id="drop-gainloss-name"></span>
+                    </div>
+                    <input type="file" id="file-gainloss" accept=".csv" hidden onchange="App.handleFile(this,'gainloss')">
+                </div>
+                <div class="form-group">
+                    <label>Symbol Map CSV <span class="optional">(optional)</span></label>
+                    <div class="file-drop" id="drop-symbolmap" onclick="document.getElementById('file-symbolmap').click()">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        <span class="drop-text">Drop CSV here or click to browse</span>
+                        <span class="drop-file" id="drop-symbolmap-name"></span>
+                    </div>
+                    <input type="file" id="file-symbolmap" accept=".csv" hidden onchange="App.handleFile(this,'symbolmap')">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+                <button class="btn btn-primary" id="btn-import" onclick="App.importCSV()">Import Portfolio</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transaction Modal -->
+    <div class="modal-overlay" id="txn-modal" onclick="App.closeModal(event)">
+        <div class="modal modal-sm" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>Add Transaction</h2>
+                <button class="modal-close" onclick="App.closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group"><label>Symbol</label><input type="text" id="txn-symbol" placeholder="SBIN.NS"></div>
+                    <div class="form-group"><label>Type</label><select id="txn-type"><option value="BUY">Buy</option><option value="SELL">Sell</option></select></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label>Quantity</label><input type="number" id="txn-qty" placeholder="0"></div>
+                    <div class="form-group"><label>Price (₹)</label><input type="number" id="txn-price" placeholder="0.00" step="0.01"></div>
+                </div>
+                <div class="form-group"><label>Date</label><input type="date" id="txn-date"></div>
+                <div class="form-group"><label>Notes</label><input type="text" id="txn-notes" placeholder="Optional notes"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="App.addTransaction()">Add Transaction</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Watchlist Modal -->
+    <div class="modal-overlay" id="watchlist-modal" onclick="App.closeModal(event)">
+        <div class="modal modal-sm" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>Add to Watchlist</h2>
+                <button class="modal-close" onclick="App.closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group"><label>Yahoo Symbol</label><input type="text" id="wl-symbol" placeholder="SBIN.NS"></div>
+                <div class="form-group"><label>Name</label><input type="text" id="wl-name" placeholder="State Bank of India"></div>
+                <div class="form-group"><label>Target Price (₹)</label><input type="number" id="wl-target" placeholder="0.00" step="0.01"></div>
+                <div class="form-group"><label>Notes</label><input type="text" id="wl-notes" placeholder="Optional notes"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="App.addToWatchlist()">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

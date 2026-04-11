@@ -25,6 +25,32 @@ Don't just observe the market—dominate it. With a meticulously crafted, glassm
 - **Absolute Foresight:** Track historical trends, log meticulous transactions, and manage multiple portfolios with zero friction.
 - **Watchlist of the Ambitious:** Maintain a strict list of targets. Track live movements and strike only when the valuation is absolutely perfect. 
 
+## System Architecture & Required Structure
+
+Because this fortress runs on Flask, you must maintain the strict folder architecture shown below. If you upload the files to GitHub without preserving these exact folders, the dashboard will lose its styling and fail to load properly.
+
+```text
+Portfolio-Tracker/
+├── app.py                   # The core routing engine
+├── data_processor.py        # Intelligent CSV parser
+├── price_fetcher.py         # Live Yahoo Finance integration
+├── database.py              # SQLite architect
+├── xirr_calculator.py       # Advanced returns calculator
+├── templates/               
+│   └── index.html           # The Dashboard layout (REQUIRED FOLDER)
+├── static/                  
+│   ├── css/style.css        # The UI aesthetics (REQUIRED FOLDER)
+│   └── js/app.js            # Frontend logic
+├── README.md
+└── requirements.txt
+```
+
+> [!WARNING]
+> **Important Note for GitHub Uploads:**  
+> Because GitHub's web interface often blocks dragging and dropping folders directly from your computer, you must be careful when uploading. To preserve the structure:
+> 1. **Best Method:** Upload via the Terminal using Git (`git push`).
+> 2. **Browser Method:** If using the web browser, open your repo, click "Add file" -> "Upload files", and **drag the `templates` and `static` folders directly from Mac Finder** into the browser box. Do not use the clickable "choose your files" menu, as it will strip the folders and break the application.
+
 ## Deploying Your Fortress
 
 Setting up your command center is phenomenal and effortless.

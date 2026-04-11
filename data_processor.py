@@ -12,12 +12,12 @@ def load_csv_smart(file_or_path):
         """Check if the DataFrame columns look like real data headers."""
         if df.shape[1] < 3 or df.shape[0] < 1:
             return False
-        col_str = ' '.join(str(c).lower() for c in df.columns)
+        col_str = ' '.join(str(c).lower() for c in df.columns if 'unnamed' not in str(c).lower())
         return any(kw in col_str for kw in HEADER_KEYWORDS)
 
     # Try comma-separated first (standard for Indian broker CSVs)
     for sep in [',', ';', '\t', None]:
-        for skip in range(6):
+        for skip in range(25):
             try:
                 if hasattr(file_or_path, 'seek'):
                     file_or_path.seek(0)
@@ -43,8 +43,22 @@ def load_csv_smart(file_or_path):
 def normalize_columns(df):
     """Normalize column names and rename common broker-specific variants."""
     df = df.copy()
+
+    # Identify 'lakhs'/'lacs' columns before removing characters
+    lakhs_cols = []
+    for c in df.columns:
+        c_str = str(c).lower()
+        if ('lakh' in c_str or 'lac' in c_str) and ('value' in c_str or 'amount' in c_str or 'fair' in c_str):
+            lakhs_cols.append(c)
+
     # Convert to lowercase, replace non-alphanumeric with underscore, strip underscores
-    df.columns = [re.sub(r'[^a-z0-9]', '_', c.strip().lower()).strip('_') for c in df.columns]
+    new_cols = []
+    for c in df.columns:
+        if c in lakhs_cols:
+            new_cols.append('current_value_in_lakhs')
+        else:
+            new_cols.append(re.sub(r'[^a-z0-9]', '_', str(c).strip().lower()).strip('_'))
+    df.columns = new_cols
 
     renames = {
         # ISIN variants
@@ -58,6 +72,11 @@ def normalize_columns(df):
         'stock_name': 'name',
         'security': 'name',
         'scrip_name': 'name',
+        'name_of_the_instrument': 'name',
+        
+        # Sector variants
+        'industry_classification': 'sector',
+        'sector_name': 'sector',
 
         # Quantity variants
         'qty': 'quantity',
@@ -119,7 +138,7 @@ def parse_numeric(val):
 def process_holdings_csv(file_or_path):
     df = load_csv_smart(file_or_path)
     df = normalize_columns(df)
-    for col in ['quantity', 'avg_price', 'ltp', 'current_value', 'pnl', 'invested']:
+    for col in ['quantity', 'avg_price', 'ltp', 'current_value', 'pnl', 'invested', 'current_value_in_lakhs']:
         if col in df.columns:
             df[col] = df[col].apply(parse_numeric)
     return df
@@ -153,10 +172,10 @@ def merge_holdings_gainloss(holdings_df, gainloss_df):
         g = g[g['quantity'] > 0].copy()
 
     # Parse numeric columns
-    for col in ['quantity', 'ltp', 'current_value']:
+    for col in ['quantity', 'ltp', 'current_value', 'current_value_in_lakhs']:
         if col in h.columns:
             h[col] = h[col].apply(parse_numeric)
-    for col in ['quantity', 'avg_price', 'invested', 'ltp', 'current_value']:
+    for col in ['quantity', 'avg_price', 'invested', 'ltp', 'current_value', 'current_value_in_lakhs']:
         if col in g.columns:
             g[col] = g[col].apply(parse_numeric)
 
@@ -246,9 +265,16 @@ def extract_holdings_data(df, symbol_map=None):
         avg_price = parse_numeric(row.get('avg_price', 0))
         if avg_price == 0:
             avg_price = parse_numeric(row.get('avg_price_gl', 0))
-        # Fallback: use LTP from holdings if no avg price available
+        # Fallback 1: use LTP from holdings if no avg price available
         if avg_price == 0:
             avg_price = parse_numeric(row.get('ltp', 0))
+        # Fallback 2: deduce from current_value (or current_value_in_lakhs) if no avg cost present
+        if avg_price == 0:
+            cv = parse_numeric(row.get('current_value', 0))
+            if cv == 0 and 'current_value_in_lakhs' in row:
+                cv = parse_numeric(row.get('current_value_in_lakhs', 0)) * 100000.0
+            if cv > 0 and quantity > 0:
+                avg_price = cv / float(quantity)
 
         # Always calculate invested value from quantity * avg_price.
         # This ensures correctness when Beneficiary + Pledge shares are
@@ -258,11 +284,13 @@ def extract_holdings_data(df, symbol_map=None):
 
         # --- Resolve symbol and sector ---
         symbol = ''
-        sector = ''
+        sector = _clean_str(row.get('sector', ''))
 
         # 1) Try direct ISIN mapping (most reliable)
         if isin in ISIN_TO_SYMBOL:
-            symbol, sector = ISIN_TO_SYMBOL[isin]
+            direct_symbol, direct_sector = ISIN_TO_SYMBOL[isin]
+            symbol = symbol or direct_symbol
+            sector = sector or direct_sector
 
         # 2) Try symbol map from DB/CSV
         if not symbol and symbol_map and isin in symbol_map:

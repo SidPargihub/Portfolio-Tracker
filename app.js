@@ -89,6 +89,41 @@ const App = {
         this.renderCurrentView();
     },
 
+    async renamePortfolio() {
+        if (!this.state.portfolioId) return;
+        const p = this.state.portfolios.find(x => x.id === this.state.portfolioId);
+        if (!p) return;
+        const newName = prompt("Rename portfolio:", p.name);
+        if (newName && newName.trim() !== "" && newName !== p.name) {
+            try {
+                await fetch(`/api/portfolios/${this.state.portfolioId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName.trim() })
+                });
+                await this.loadPortfolios();
+            } catch (e) {
+                alert("Error renaming portfolio.");
+            }
+        }
+    },
+
+    async deletePortfolio() {
+        if (!this.state.portfolioId) return;
+        const p = this.state.portfolios.find(x => x.id === this.state.portfolioId);
+        if (!p) return;
+        if (confirm(`Are you sure you want to permanently delete "${p.name}"? This cannot be undone.`)) {
+            try {
+                await this.api.del(`/api/portfolios/${this.state.portfolioId}`);
+                this.state.portfolioId = null;
+                await this.loadPortfolios();
+                this.navigate('dashboard');
+            } catch (e) {
+                alert("Error deleting portfolio.");
+            }
+        }
+    },
+
     // ── Navigation ──
     navigate(view) {
         this.state.view = view;

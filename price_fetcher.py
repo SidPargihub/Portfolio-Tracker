@@ -31,7 +31,9 @@ def fetch_prices(symbols, isin_map=None):
         # If we previously resolved this symbol to a different one, use it
         effective = _resolved_symbols.get(s, s)
         if effective in _price_cache and (now - _price_cache[effective]['t']) < _CACHE_TTL:
-            cached[s] = _price_cache[effective]['d']
+            if _price_cache[effective]['d'] is not None:
+                cached[s] = _price_cache[effective]['d']
+            # If it is None, it's a cached failure. Do not add to to_fetch.
         else:
             to_fetch.append(s)
 
@@ -78,16 +80,28 @@ def fetch_prices(symbols, isin_map=None):
 
     # ── Stage 3: ISIN-based resolution (universal last resort) ──
     if still_failed and isin_map:
+        # Prevent hanging & Yahoo Finance rate limits by capping ISIN lookups per request
+        MAX_ISIN_LOOKUPS = 5
+        lookups_done = 0
         for orig_sym in list(still_failed):
+            if lookups_done >= MAX_ISIN_LOOKUPS:
+                break
             isin = isin_map.get(orig_sym)
             if not isin:
                 continue
+            
+            lookups_done += 1
             resolved = _resolve_via_isin(isin)
             if resolved:
                 _resolved_symbols[orig_sym] = resolved['symbol']
                 _price_cache[resolved['symbol']] = {'d': resolved['data'], 't': now}
                 cached[orig_sym] = resolved['data']
                 still_failed.remove(orig_sym)
+
+    # ── Stage 4: Cache absolute failures to prevent hammering on refresh ──
+    for orig_sym in still_failed:
+        eff = _resolved_symbols.get(orig_sym, orig_sym)
+        _price_cache[eff] = {'d': None, 't': now}
 
     return cached
 

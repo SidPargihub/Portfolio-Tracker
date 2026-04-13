@@ -1,4 +1,6 @@
 import os
+import math
+import logging
 from flask import Flask, render_template, request, jsonify
 import database as db
 import data_processor as dp
@@ -8,7 +10,81 @@ import xirr_calculator as xirr
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 db.init_db()
+
+
+# ── Validation Helpers ──
+
+MAX_STRING_LENGTH = 500
+MAX_NOTES_LENGTH = 2000
+MAX_NUMERIC_VALUE = 1e15  # 1 quadrillion — sane upper bound
+
+
+def _require_json():
+    """Ensure the request has a valid JSON body. Returns (data, error_response)."""
+    if not request.is_json:
+        return None, (jsonify({'error': 'Content-Type must be application/json'}), 415)
+    data = request.get_json(silent=True)
+    if data is None:
+        return None, (jsonify({'error': 'Invalid or malformed JSON body'}), 400)
+    return data, None
+
+
+def _validate_string(value, field_name, max_len=MAX_STRING_LENGTH, required=False):
+    """Validate a string field. Returns (cleaned_value, error_message)."""
+    if value is None:
+        if required:
+            return None, f"'{field_name}' is required"
+        return None, None
+    if not isinstance(value, str):
+        return None, f"'{field_name}' must be a string"
+    value = value.strip()
+    if required and not value:
+        return None, f"'{field_name}' cannot be empty"
+    if len(value) > max_len:
+        return None, f"'{field_name}' exceeds maximum length of {max_len} characters"
+    return value, None
+
+
+def _validate_number(value, field_name, required=False, allow_negative=False):
+    """Validate a numeric field. Returns (cleaned_value, error_message)."""
+    if value is None:
+        if required:
+            return None, f"'{field_name}' is required"
+        return None, None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None, f"'{field_name}' must be a number"
+    if math.isinf(value) or math.isnan(value):
+        return None, f"'{field_name}' must be a finite number"
+    if abs(value) > MAX_NUMERIC_VALUE:
+        return None, f"'{field_name}' exceeds allowed range"
+    if not allow_negative and value < 0:
+        return None, f"'{field_name}' cannot be negative"
+    return value, None
+
+
+def _validate_date(value, field_name, required=False):
+    """Validate a date string (YYYY-MM-DD). Returns (value, error_message)."""
+    if value is None:
+        if required:
+            return None, f"'{field_name}' is required"
+        return None, None
+    if not isinstance(value, str):
+        return None, f"'{field_name}' must be a date string (YYYY-MM-DD)"
+    import re
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', value.strip()):
+        return None, f"'{field_name}' must be in YYYY-MM-DD format"
+    return value.strip(), None
+
+
+def _validation_error(msg):
+    return jsonify({'error': msg}), 400
 
 
 def _persist_resolved_symbols():
@@ -39,14 +115,29 @@ def get_portfolios():
 
 @app.route('/api/portfolios', methods=['POST'])
 def create_portfolio():
-    data = request.json
-    pid = db.create_portfolio(data.get('name', 'My Portfolio'))
-    return jsonify({'id': pid, 'name': data.get('name')})
+    data, err = _require_json()
+    if err:
+        return err
+    name, verr = _validate_string(data.get('name', 'My Portfolio'), 'name')
+    if verr:
+        return _validation_error(verr)
+    if not name:
+        name = 'My Portfolio'
+    pid = db.create_portfolio(name)
+    return jsonify({'id': pid, 'name': name})
 
 
 @app.route('/api/portfolios/<int:pid>', methods=['PUT'])
 def update_portfolio(pid):
-    db.rename_portfolio(pid, request.json.get('name', 'Portfolio'))
+    data, err = _require_json()
+    if err:
+        return err
+    name, verr = _validate_string(data.get('name', 'Portfolio'), 'name')
+    if verr:
+        return _validation_error(verr)
+    if not name:
+        name = 'Portfolio'
+    db.rename_portfolio(pid, name)
     return jsonify({'ok': True})
 
 
@@ -153,7 +244,8 @@ def import_csv():
             'message': f'Imported {len(holdings_data)} holdings successfully',
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.exception('Import failed')
+        return jsonify({'error': 'Import failed. Please check your CSV files and try again.'}), 500
 
 
 # ── Edit Holding ──
@@ -161,7 +253,21 @@ def import_csv():
 @app.route('/api/holdings/<int:hid>', methods=['PATCH'])
 def update_holding(hid):
     """Update editable fields of a single holding."""
-    d = request.json
+    d, err = _require_json()
+    if err:
+        return err
+    # Validate numeric fields if present
+    for field in ['quantity', 'avg_price']:
+        if field in d:
+            val, verr = _validate_number(d[field], field)
+            if verr:
+                return _validation_error(verr)
+    # Validate string fields if present
+    for field in ['name', 'symbol', 'sector']:
+        if field in d:
+            val, verr = _validate_string(d[field], field)
+            if verr:
+                return _validation_error(verr)
     db.update_holding(hid, d)
     return jsonify({'ok': True})
 
@@ -233,8 +339,22 @@ def get_watchlist():
 
 @app.route('/api/watchlist', methods=['POST'])
 def add_watchlist():
-    d = request.json
-    db.add_to_watchlist(d['symbol'], d.get('name'), d.get('target_price'), d.get('notes'))
+    d, err = _require_json()
+    if err:
+        return err
+    symbol, verr = _validate_string(d.get('symbol'), 'symbol', required=True)
+    if verr:
+        return _validation_error(verr)
+    name, verr = _validate_string(d.get('name'), 'name')
+    if verr:
+        return _validation_error(verr)
+    target_price, verr = _validate_number(d.get('target_price'), 'target_price')
+    if verr:
+        return _validation_error(verr)
+    notes, verr = _validate_string(d.get('notes'), 'notes', max_len=MAX_NOTES_LENGTH)
+    if verr:
+        return _validation_error(verr)
+    db.add_to_watchlist(symbol, name, target_price, notes)
     return jsonify({'ok': True})
 
 
@@ -253,8 +373,36 @@ def get_transactions(pid):
 
 @app.route('/api/portfolios/<int:pid>/transactions', methods=['POST'])
 def add_transaction(pid):
-    d = request.json
-    db.add_transaction(pid, d['symbol'], d.get('name', ''), d['type'], d['quantity'], d['price'], d['date'], d.get('notes'))
+    d, err = _require_json()
+    if err:
+        return err
+    # Validate required fields
+    symbol, verr = _validate_string(d.get('symbol'), 'symbol', required=True)
+    if verr:
+        return _validation_error(verr)
+    name, verr = _validate_string(d.get('name', ''), 'name')
+    if verr:
+        return _validation_error(verr)
+    txn_type = d.get('type')
+    if txn_type not in ('BUY', 'SELL'):
+        return _validation_error("'type' must be 'BUY' or 'SELL'")
+    quantity, verr = _validate_number(d.get('quantity'), 'quantity', required=True)
+    if verr:
+        return _validation_error(verr)
+    if quantity <= 0:
+        return _validation_error("'quantity' must be greater than 0")
+    price, verr = _validate_number(d.get('price'), 'price', required=True)
+    if verr:
+        return _validation_error(verr)
+    if price <= 0:
+        return _validation_error("'price' must be greater than 0")
+    date, verr = _validate_date(d.get('date'), 'date', required=True)
+    if verr:
+        return _validation_error(verr)
+    notes, verr = _validate_string(d.get('notes'), 'notes', max_len=MAX_NOTES_LENGTH)
+    if verr:
+        return _validation_error(verr)
+    db.add_transaction(pid, symbol, name or '', txn_type, quantity, price, date, notes)
     return jsonify({'ok': True})
 
 
@@ -409,12 +557,27 @@ def get_symbol_map():
 
 @app.route('/api/symbol-map', methods=['POST'])
 def update_symbol_map():
-    d = request.json
-    db.save_symbol_mapping(d['isin'], d.get('name'), d['symbol'], d.get('sector'))
+    d, err = _require_json()
+    if err:
+        return err
+    isin, verr = _validate_string(d.get('isin'), 'isin', required=True)
+    if verr:
+        return _validation_error(verr)
+    symbol, verr = _validate_string(d.get('symbol'), 'symbol', required=True)
+    if verr:
+        return _validation_error(verr)
+    name, verr = _validate_string(d.get('name'), 'name')
+    if verr:
+        return _validation_error(verr)
+    sector, verr = _validate_string(d.get('sector'), 'sector')
+    if verr:
+        return _validation_error(verr)
+    db.save_symbol_mapping(isin, name, symbol, sector)
     return jsonify({'ok': True})
 
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', '5001'))
+    debug = os.getenv('FLASK_DEBUG', '0') == '1'
     print(f"\n  🚀 Portfolio Tracker running at http://localhost:{port}\n")
-    app.run(debug=True, port=port)
+    app.run(debug=debug, port=port)

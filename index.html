@@ -190,6 +190,31 @@
         </div>
     </div>
 
+    <!-- Edit Holding Modal -->
+    <div class="modal-overlay" id="edit-holding-modal" onclick="App.closeModal(event)">
+        <div class="modal modal-sm" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>Edit Holding</h2>
+                <button class="modal-close" onclick="App.closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-holding-id">
+                <div class="form-group"><label>Stock Name</label><input type="text" id="edit-holding-name" placeholder="e.g. State Bank of India"></div>
+                <div class="form-group"><label>Yahoo Symbol</label><input type="text" id="edit-holding-symbol" placeholder="e.g. SBIN.NS"></div>
+                <div class="form-row">
+                    <div class="form-group"><label>Quantity</label><input type="number" id="edit-holding-qty" placeholder="0" step="any"></div>
+                    <div class="form-group"><label>Avg Buy Price (₹)</label><input type="number" id="edit-holding-avg" placeholder="0.00" step="any"></div>
+                </div>
+                <div class="form-group"><label>Sector</label><input type="text" id="edit-holding-sector" placeholder="e.g. Finance"></div>
+                <p style="color:var(--text-tertiary);font-size:0.78rem;margin-top:4px">💡 Invested value will be auto-recalculated as Qty × Avg Price on save.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="App.closeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="App.saveEditHolding()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
     <div class="toast" id="toast"></div>
     <script src="/static/js/app.js"></script>
 </body>

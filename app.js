@@ -15,6 +15,8 @@ const App = {
         transactions: [],
         files: {},
         charts: {},
+        holdingsSortBy: 'current_value',
+        holdingsSortDesc: true
     },
 
     // ── Init ──
@@ -54,6 +56,10 @@ const App = {
         },
         async post(url, data) {
             const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+            return r.json();
+        },
+        async patch(url, data) {
+            const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
             return r.json();
         },
         async postForm(url, formData) {
@@ -241,6 +247,46 @@ const App = {
         }
     },
 
+    sortHoldings(col) {
+        if (this.state.holdingsSortBy === col) {
+            this.state.holdingsSortDesc = !this.state.holdingsSortDesc;
+        } else {
+            this.state.holdingsSortBy = col;
+            this.state.holdingsSortDesc = col !== 'name' && col !== 'symbol';
+        }
+        this.renderCurrentView();
+    },
+
+    showEditHolding(h) {
+        document.getElementById('edit-holding-id').value = h.id;
+        document.getElementById('edit-holding-name').value = h.name || '';
+        document.getElementById('edit-holding-symbol').value = h.symbol || '';
+        document.getElementById('edit-holding-qty').value = h.quantity || '';
+        document.getElementById('edit-holding-avg').value = h.avg_price || '';
+        document.getElementById('edit-holding-sector').value = h.sector || '';
+        document.getElementById('edit-holding-modal').classList.add('active');
+    },
+
+    async saveEditHolding() {
+        const id = document.getElementById('edit-holding-id').value;
+        if (!id) return;
+        const payload = {
+            name: document.getElementById('edit-holding-name').value.trim(),
+            symbol: document.getElementById('edit-holding-symbol').value.trim(),
+            quantity: parseFloat(document.getElementById('edit-holding-qty').value) || 0,
+            avg_price: parseFloat(document.getElementById('edit-holding-avg').value) || 0,
+            sector: document.getElementById('edit-holding-sector').value.trim(),
+        };
+        try {
+            await this.api.patch(`/api/holdings/${id}`, payload);
+            this.closeModal();
+            this.showToast('Holding updated ✓', 'success');
+            this.renderCurrentView();
+        } catch (e) {
+            this.showToast('Failed to save: ' + e.message, 'error');
+        }
+    },
+
     // ── Holdings View ──
     async renderHoldings(el, actions) {
         if (!this.state.portfolioId) { el.innerHTML = this.emptyState('No Portfolio Selected', 'Import a CSV or select a portfolio to view holdings.', 'Import Portfolio', 'App.showImportModal()'); return; }
@@ -252,15 +298,46 @@ const App = {
 
             if (this.state.holdings.length === 0) { el.innerHTML = this.emptyState('No Holdings', 'Import your broker CSV to add holdings.', 'Import CSV', 'App.showImportModal()'); return; }
 
+            // Apply Sort
+            const col = this.state.holdingsSortBy || 'current_value';
+            const desc = this.state.holdingsSortDesc ? -1 : 1;
+            const sorted = [...this.state.holdings].sort((a, b) => {
+                let va = a[col] !== undefined ? a[col] : 0;
+                let vb = b[col] !== undefined ? b[col] : 0;
+                if (col === 'name') {
+                    va = (a.name || a.symbol || '').toLowerCase();
+                    vb = (b.name || b.symbol || '').toLowerCase();
+                } else if (col === 'symbol') {
+                    va = (a.symbol || '').toLowerCase();
+                    vb = (b.symbol || '').toLowerCase();
+                }
+                if (typeof va === 'string' && typeof vb === 'string') return va.localeCompare(vb) * desc;
+                return (va > vb ? 1 : (va < vb ? -1 : 0)) * desc;
+            });
+
+            const th = (label, k, cls='') => {
+                const isSorted = this.state.holdingsSortBy === k;
+                const icon = isSorted ? (this.state.holdingsSortDesc ? '▼' : '▲') : '';
+                return `<th class="${cls} sortable" onclick="App.sortHoldings('${k}')" style="cursor:pointer;white-space:nowrap;user-select:none" title="Sort by ${label}">${label} <span style="font-size:0.75em;color:var(--text-tertiary);margin-left:2px;display:inline-block;width:12px">${icon}</span></th>`;
+            };
+
             let html = `<div class="card"><div class="table-wrapper"><table>
                 <thead><tr>
-                    <th>Stock</th><th>Symbol</th><th class="text-right">Qty</th><th class="text-right">Avg Price</th>
-                    <th class="text-right">LTP</th><th class="text-right">Invested</th><th class="text-right">Current</th>
-                    <th class="text-right">P&L</th><th class="text-right">Return</th>
+                    ${th('Stock', 'name')}
+                    ${th('Symbol', 'symbol')}
+                    ${th('Qty', 'quantity', 'text-right')}
+                    ${th('Avg Price', 'avg_price', 'text-right')}
+                    ${th('LTP', 'ltp', 'text-right')}
+                    ${th('Invested', 'invested_value', 'text-right')}
+                    ${th('Current', 'current_value', 'text-right')}
+                    ${th('P&L', 'pnl', 'text-right')}
+                    ${th('Return %', 'return_pct', 'text-right')}
+                    <th style="width:36px"></th>
                 </tr></thead><tbody>`;
 
-            this.state.holdings.forEach(h => {
+            sorted.forEach(h => {
                 const cls = h.pnl >= 0 ? 'positive' : 'negative';
+                const hJson = this.esc(JSON.stringify(h));
                 html += `<tr>
                     <td class="stock-name">${this.esc(h.name || h.symbol)}</td>
                     <td style="color:var(--text-tertiary);font-size:0.82rem">${this.esc(h.symbol)}</td>
@@ -271,6 +348,7 @@ const App = {
                     <td class="text-right mono">${this.fmt(h.current_value)}</td>
                     <td class="text-right mono ${cls}">${this.fmt(h.pnl)}</td>
                     <td class="text-right mono ${cls}">${this.fmtPct(h.return_pct)}</td>
+                    <td><button class="btn-icon" style="width:28px;height:28px;opacity:0.6" title="Edit holding" onclick='App.showEditHolding(${JSON.stringify(h)})'><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button></td>
                 </tr>`;
             });
 

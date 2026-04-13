@@ -166,40 +166,24 @@ def portfolio_xirr(holdings, transactions=None, as_of_date=None):
 
     cashflows = []
 
-    if transactions and len(transactions) > 0:
-        # Use actual transaction data for precise XIRR
-        for txn in transactions:
+    # Use holdings cost basis as approximate cashflows for the entire portfolio
+    for h in holdings:
+        invested = float(h.get('invested_value', 0))
+        if invested <= 0:
+            continue
+
+        purchase_date = h.get('purchase_date')
+        if purchase_date:
             try:
-                txn_date = _parse_date(txn['date'])
-                amount = float(txn['quantity']) * float(txn['price'])
-                if txn['type'] == 'BUY':
-                    cashflows.append((txn_date, -amount))
-                elif txn['type'] == 'SELL':
-                    cashflows.append((txn_date, amount))
-            except (ValueError, KeyError, TypeError):
-                continue
-    else:
-        # Use holdings cost basis as approximate cashflows
-        for h in holdings:
-            invested = float(h.get('invested_value', 0))
-            if invested <= 0:
-                continue
+                purchase_date = _parse_date(purchase_date)
+            except (ValueError, TypeError):
+                purchase_date = None
 
-            # Use purchase_date if available, otherwise estimate
-            purchase_date = h.get('purchase_date')
-            if purchase_date:
-                try:
-                    purchase_date = _parse_date(purchase_date)
-                except (ValueError, TypeError):
-                    purchase_date = None
+        if not purchase_date:
+            from datetime import timedelta
+            purchase_date = as_of_date - timedelta(days=180)
 
-            if not purchase_date:
-                # Default: assume investment was made ~6 months ago
-                # This is a rough estimate; transactions give much better accuracy
-                from datetime import timedelta
-                purchase_date = as_of_date - timedelta(days=180)
-
-            cashflows.append((purchase_date, -invested))
+        cashflows.append((purchase_date, -invested))
 
     if not cashflows:
         return None

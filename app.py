@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template, request, jsonify
 import database as db
 import data_processor as dp
@@ -153,6 +154,16 @@ def import_csv():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# ── Edit Holding ──
+
+@app.route('/api/holdings/<int:hid>', methods=['PATCH'])
+def update_holding(hid):
+    """Update editable fields of a single holding."""
+    d = request.json
+    db.update_holding(hid, d)
+    return jsonify({'ok': True})
 
 
 # ── Sectors ──
@@ -404,5 +415,6 @@ def update_symbol_map():
 
 
 if __name__ == '__main__':
-    print("\n  🚀 Portfolio Tracker running at http://localhost:5000\n")
-    app.run(debug=True, port=5000)
+    port = int(os.getenv('PORT', '5001'))
+    print(f"\n  🚀 Portfolio Tracker running at http://localhost:{port}\n")
+    app.run(debug=True, port=port)
